@@ -1,0 +1,127 @@
+const PDFDocument = require('pdfkit');
+const fs = require('fs');
+const path = require('path');
+const db = require('../db/database');
+
+function generateReport(type = 'weekly', userId = null) {
+  const reportsDir = path.join(__dirname, '..', 'reports');
+  if (!fs.existsSync(reportsDir)) {
+    fs.mkdirSync(reportsDir, { recursive: true });
+  }
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+  const filename = `medigaurd_${type}_report_${timestamp}.pdf`;
+  const filePath = path.join(reportsDir, filename);
+  const relativePath = `reports/${filename}`;
+
+  const doc = new PDFDocument({ margin: 50 });
+  const stream = fs.createWriteStream(filePath);
+  doc.pipe(stream);
+
+  // Header
+  doc.fontSize(24).fillColor('#0ea5e9').text('MediGuard', { align: 'center' });
+  doc.fontSize(14).fillColor('#64748b').text('Medicine Storage Monitoring Report', { align: 'center' });
+  doc.moveDown();
+  doc.fontSize(10).fillColor('#94a3b8').text(`Report Type: ${type.toUpperCase()} | Generated: ${new Date().toLocaleString()}`, { align: 'center' });
+  doc.moveDown(2);
+
+  // Divider
+  doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke('#e2e8f0');
+  doc.moveDown();
+
+  // Summary Section
+  const daysBack = type === 'weekly' ? 7 : 30;
+  const sensorData = db.prepare(`
+    SELECT * FROM sensors_data 
+    WHERE timestamp >= datetime('now', '-${daysBack} days')
+    ORDER BY timestamp ASC
+  `).all();
+
+  const temps = sensorData.map(d => d.temperature);
+  const humidities = sensorData.map(d => d.humidity);
+  const avgTemp = temps.length ? (temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(2) : 'N/A';
+  const minTemp = temps.length ? Math.min(...temps).toFixed(2) : 'N/A';
+  const maxTemp = temps.length ? Math.max(...temps).toFixed(2) : 'N/A';
+  const avgHumidity = humidities.length ? (humidities.reduce((a, b) => a + b, 0) / humidities.length).toFixed(1) : 'N/A';
+
+  doc.fontSize(16).fillColor('#1e293b').text('Storage Environment Summary');
+  doc.moveDown(0.5);
+  doc.fontSize(11).fillColor('#475569');
+  doc.text(`Period: Last ${daysBack} days`);
+  doc.text(`Total Readings: ${sensorData.length}`);
+  doc.text(`Average Temperature: ${avgTemp}°C`);
+  doc.text(`Temperature Range: ${minTemp}°C — ${maxTemp}°C`);
+  doc.text(`Average Humidity: ${avgHumidity}%`);
+  doc.moveDown();
+
+  // Compliance Section
+  const compliance = db.prepare('SELECT * FROM compliance_records ORDER BY date DESC LIMIT ?').all(daysBack);
+  const avgCompliance = compliance.length 
+    ? (compliance.reduce((sum, r) => sum + (r.dailyScore || 0), 0) / compliance.length).toFixed(1)
+    : 'N/A';
+
+  doc.fontSize(16).fillColor('#1e293b').text('Compliance Summary');
+  doc.moveDown(0.5);
+  doc.fontSize(11).fillColor('#475569');
+  doc.text(`Average Compliance Score: ${avgCompliance}%`);
+  doc.text(`Compliant Days: ${compliance.filter(r => r.status === 'compliant').length}`);
+  doc.text(`Warning Days: ${compliance.filter(r => r.status === 'warning').length}`);
+  doc.text(`Non-Compliant Days: ${compliance.filter(r => r.status === 'non-compliant').length}`);
+  doc.moveDown();
+
+  // Alerts Section
+  const alerts = db.prepare(`
+    SELECT severity, COUNT(*) as count FROM alerts 
+    WHERE timestamp >= datetime('now', '-${daysBack} days')
+    GROUP BY severity ORDER BY count DESC
+  `).all();
+
+  doc.fontSize(16).fillColor('#1e293b').text('Alert Summary');
+  doc.moveDown(0.5);
+  doc.fontSize(11).fillColor('#475569');
+  if (alerts.length === 0) {
+    doc.text('No alerts during this period.');
+  } else {
+    alerts.forEach(a => {
+      doc.text(`${a.severity.toUpperCase()}: ${a.count} alert(s)`);
+    });
+  }
+  doc.moveDown();
+
+  // Excursion Section
+  const excursions = sensorData.filter(d => d.temperature > 8 || d.temperature < 2);
+  const excursionPct = sensorData.length ? ((excursions.length / sensorData.length) * 100).toFixed(2) : 0;
+  doc.fontSize(16).fillColor('#1e293b').text('Temperature Excursions');
+  doc.moveDown(0.5);
+  doc.fontSize(11).fillColor('#475569');
+  doc.text(`Total Excursions: ${excursions.length} readings (${excursionPct}% of data)`);
+  doc.text(`High Temperature Events (>8°C): ${excursions.filter(e => e.temperature > 8).length}`);
+  doc.text(`Low Temperature Events (<2°C): ${excursions.filter(e => e.temperature < 2).length}`);
+  doc.moveDown();
+
+  // Medicines at Risk
+  const medicines = db.prepare("SELECT * FROM medicines WHERE spoilageRiskLevel IN ('critical', 'high') ORDER BY spoilageRiskLevel").all();
+  doc.fontSize(16).fillColor('#1e293b').text('High-Risk Medicines Stored');
+  doc.moveDown(0.5);
+  doc.fontSize(11).fillColor('#475569');
+  medicines.forEach(m => {
+    doc.text(`• ${m.name} (${m.category}) — Required: ${m.minTemp}°C to ${m.maxTemp}°C — Risk: ${m.spoilageRiskLevel.toUpperCase()}`);
+  });
+  doc.moveDown(2);
+
+  // Footer
+  doc.fontSize(8).fillColor('#94a3b8').text(
+    'This report was automatically generated by MediGuard Medicine Storage Monitoring System. For queries, contact system administrator.',
+    { align: 'center' }
+  );
+
+  doc.end();
+
+  // Save report reference in DB
+  db.prepare('INSERT INTO reports (type, filePath, generatedBy) VALUES (?, ?, ?)')
+    .run(type, relativePath, userId);
+
+  return relativePath;
+}
+
+module.exports = { generateReport };

@@ -1,0 +1,21 @@
+{
+  "name": "medigaurd-server",
+  "version": "1.0.0",
+  "description": "MediGuard - Medicine Storage Monitoring Backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "seed": "node db/seed.js"
+  },
+  "dependencies": {
+    "bcryptjs": "*",
+    "better-sqlite3": "*",
+    "cors": "*",
+    "dotenv": "*",
+    "express": "*",
+    "jsonwebtoken": "*",
+    "pdfkit": "*",
+    "socket.io": "*"
+  }
+}
