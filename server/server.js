@@ -39,6 +39,21 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString(), service: 'MediGuard API' });
 });
 
+// Serve built frontend (production)
+const publicPath = path.join(__dirname, 'public');
+app.use(express.static(publicPath));
+
+// All non-API routes → serve index.html (SPA client-side routing)
+app.get(/^\/(?!api).*/, (req, res) => {
+  const indexPath = path.join(publicPath, 'index.html');
+  const fs = require('fs');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(200).json({ message: 'MediGuard API is running. Frontend not built yet — run: cd ../client && npm run build && cp -r dist ../server/public' });
+  }
+});
+
 // WebSocket connection handling
 io.on('connection', (socket) => {
   console.log(`Client connected: ${socket.id}`);
@@ -54,14 +69,18 @@ io.on('connection', (socket) => {
   });
 });
 
-// Start simulator in development mode
-const { startSimulator } = require('./services/simulator');
-startSimulator(io, 30000); // Every 30 seconds
+// Start simulator (disable by setting DISABLE_SIMULATOR=true in .env for production with real hardware)
+if (process.env.DISABLE_SIMULATOR !== 'true') {
+  const { startSimulator } = require('./services/simulator');
+  startSimulator(io, 30000);
+  console.log('  Simulator: active (30s interval)');
+} else {
+  console.log('  Simulator: disabled (using real hardware data)');
+}
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`\n  MediGuard API Server running on http://localhost:${PORT}`);
   console.log(`  Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`  WebSocket: enabled`);
-  console.log(`  Simulator: active (30s interval)\n`);
+  console.log(`  WebSocket: enabled\n`);
 });
