@@ -32,9 +32,35 @@ export default function AlertsPage() {
   const activeAlerts = alerts.filter(a => !a.resolvedStatus);
   const resolvedAlerts = alerts.filter(a => a.resolvedStatus);
 
+  // Reusable alert card for mobile
+  const AlertCard = ({ a, showResolve }) => (
+    <div className="mobile-item-card">
+      <div className="mobile-item-header">
+        <span className="mobile-item-title">{a.alertType.replace(/_/g, ' ')}</span>
+        <span className={`badge badge-${a.severity}`}>{a.severity}</span>
+      </div>
+      <div className="mobile-item-details">
+        <div className="mobile-item-detail">
+          <span className="detail-label">Time</span>
+          <span className="detail-value">{formatTime(a.timestamp)}</span>
+        </div>
+        <div className="mobile-item-detail">
+          <span className="detail-label">Status</span>
+          <span className={`badge ${a.resolvedStatus ? 'badge-success' : 'badge-warning'}`}>{a.resolvedStatus ? 'Resolved' : 'Active'}</span>
+        </div>
+      </div>
+      <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 8 }}>{a.message}</p>
+      {showResolve && !a.resolvedStatus && (
+        <div className="mobile-item-actions">
+          <button className="btn btn-outline btn-sm" onClick={() => resolveAlert(a.id)}>✓ Resolve</button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="fade-in">
-      <div className="page-header flex justify-between items-center">
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h1>Alerts</h1>
           <p>System alerts and shelf failure log</p>
@@ -44,7 +70,7 @@ export default function AlertsPage() {
         </div>
       </div>
 
-      <div className="flex gap-8 mb-16 items-center">
+      <div className="flex gap-8 mb-16 items-center" style={{ flexWrap: 'wrap' }}>
         <div className="btn-group">
           {['all','critical','high','medium','low'].map(f => (
             <button key={f} className={`btn ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)}>{f}</button>
@@ -57,10 +83,13 @@ export default function AlertsPage() {
         <div className="loading-spinner"><div className="spinner"></div></div>
       ) : (
         <>
+          {/* Active Alerts */}
           {activeAlerts.length > 0 && (
             <div className="mb-16">
               <h3 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: 12, color: 'var(--danger)' }}>⚠ Active Alerts ({activeAlerts.length})</h3>
-              <div className="card" style={{ padding: 0 }}>
+
+              {/* Desktop table */}
+              <div className="card table-responsive" style={{ padding: 0 }}>
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -84,12 +113,20 @@ export default function AlertsPage() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Mobile cards */}
+              <div className="mobile-card-list">
+                {activeAlerts.map(a => <AlertCard key={a.id} a={a} showResolve={true} />)}
+              </div>
             </div>
           )}
 
+          {/* Alert History */}
           <div>
             <h3 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: 12, color: 'var(--text-secondary)' }}>Alert History</h3>
-            <div className="card" style={{ padding: 0 }}>
+
+            {/* Desktop table */}
+            <div className="card table-responsive" style={{ padding: 0 }}>
               <table className="data-table">
                 <thead>
                   <tr>
@@ -112,6 +149,11 @@ export default function AlertsPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="mobile-card-list">
+              {alerts.slice(0, 50).map(a => <AlertCard key={a.id} a={a} showResolve={false} />)}
             </div>
           </div>
         </>

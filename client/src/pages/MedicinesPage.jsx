@@ -62,9 +62,15 @@ export default function MedicinesPage() {
   const outOfStock = medicines.filter(m => (m.quantity || 0) === 0).length;
   const lowStock = medicines.filter(m => (m.quantity || 0) > 0 && (m.quantity || 0) <= 20).length;
 
+  const getStockInfo = (qty) => {
+    if (qty === 0) return { color: 'var(--danger)', badge: 'badge-danger', label: 'Out of Stock' };
+    if (qty <= 20) return { color: 'var(--warning)', badge: 'badge-warning', label: 'Low' };
+    return { color: 'var(--success)', badge: 'badge-success', label: 'In Stock' };
+  };
+
   return (
     <div className="fade-in">
-      <div className="page-header flex justify-between items-center" style={{ flexWrap: 'wrap', gap: 12 }}>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h1>Medicines</h1>
           <p>Medicine inventory, storage requirements & stock levels</p>
@@ -107,62 +113,110 @@ export default function MedicinesPage() {
       {loading ? (
         <div className="loading-spinner"><div className="spinner"></div></div>
       ) : (
-        <div className="card table-responsive" style={{ padding: 0 }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Category</th>
-                <th>Shelf</th>
-                <th>Stock Qty</th>
-                <th>Temp Range</th>
-                <th>Risk</th>
-                {canEditStock && <th>Update Stock</th>}
-                {isAdmin && <th>Actions</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {medicines.map(m => {
-                const qty = m.quantity || 0;
-                const stockColor = qty === 0 ? 'var(--danger)' : qty <= 20 ? 'var(--warning)' : 'var(--success)';
-                const stockBadge = qty === 0 ? 'badge-danger' : qty <= 20 ? 'badge-warning' : 'badge-success';
-                const stockLabel = qty === 0 ? 'Out of Stock' : qty <= 20 ? 'Low' : 'In Stock';
-                return (
-                  <tr key={m.id}>
-                    <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{m.name}</td>
-                    <td>{m.category}</td>
-                    <td><span className="badge badge-info">Shelf {m.shelfNumber || 1}</span></td>
-                    <td>
-                      <div className="flex items-center gap-8">
-                        <span style={{ fontWeight: 700, color: stockColor, fontSize: '1rem', minWidth: 36 }}>{qty}</span>
-                        <span className={`badge ${stockBadge}`}>{stockLabel}</span>
-                      </div>
-                    </td>
-                    <td className="text-sm">{m.minTemp}°C — {m.maxTemp}°C</td>
-                    <td><span className={`badge badge-${m.spoilageRiskLevel}`}>{m.spoilageRiskLevel}</span></td>
-                    {canEditStock && (
+        <>
+          {/* Desktop table */}
+          <div className="card table-responsive" style={{ padding: 0 }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Category</th>
+                  <th>Shelf</th>
+                  <th>Stock Qty</th>
+                  <th>Temp Range</th>
+                  <th>Risk</th>
+                  {canEditStock && <th>Update Stock</th>}
+                  {isAdmin && <th>Actions</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {medicines.map(m => {
+                  const qty = m.quantity || 0;
+                  const stock = getStockInfo(qty);
+                  return (
+                    <tr key={m.id}>
+                      <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{m.name}</td>
+                      <td>{m.category}</td>
+                      <td><span className="badge badge-info">Shelf {m.shelfNumber || 1}</span></td>
                       <td>
-                        <div className="flex gap-8 items-center">
-                          <button className="btn btn-outline btn-sm" onClick={() => updateStock(m.id, qty - 1)} disabled={qty <= 0}>−</button>
-                          <button className="btn btn-outline btn-sm" onClick={() => updateStock(m.id, qty + 10)}>+10</button>
-                          <button className="btn btn-outline btn-sm" onClick={() => updateStock(m.id, qty + 50)}>+50</button>
+                        <div className="flex items-center gap-8">
+                          <span style={{ fontWeight: 700, color: stock.color, fontSize: '1rem', minWidth: 36 }}>{qty}</span>
+                          <span className={`badge ${stock.badge}`}>{stock.label}</span>
                         </div>
                       </td>
-                    )}
-                    {isAdmin && (
-                      <td>
-                        <div className="flex gap-8">
+                      <td className="text-sm">{m.minTemp}°C — {m.maxTemp}°C</td>
+                      <td><span className={`badge badge-${m.spoilageRiskLevel}`}>{m.spoilageRiskLevel}</span></td>
+                      {canEditStock && (
+                        <td>
+                          <div className="flex gap-8 items-center">
+                            <button className="btn btn-outline btn-sm" onClick={() => updateStock(m.id, qty - 1)} disabled={qty <= 0}>−</button>
+                            <button className="btn btn-outline btn-sm" onClick={() => updateStock(m.id, qty + 10)}>+10</button>
+                            <button className="btn btn-outline btn-sm" onClick={() => updateStock(m.id, qty + 50)}>+50</button>
+                          </div>
+                        </td>
+                      )}
+                      {isAdmin && (
+                        <td>
+                          <div className="flex gap-8">
+                            <button className="btn btn-outline btn-sm" onClick={() => openEdit(m)}>Edit</button>
+                            <button className="btn btn-danger btn-sm" onClick={() => handleDelete(m.id)}>Del</button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="mobile-card-list">
+            {medicines.map(m => {
+              const qty = m.quantity || 0;
+              const stock = getStockInfo(qty);
+              return (
+                <div key={m.id} className="mobile-item-card">
+                  <div className="mobile-item-header">
+                    <span className="mobile-item-title">{m.name}</span>
+                    <span className={`badge badge-${m.spoilageRiskLevel}`}>{m.spoilageRiskLevel}</span>
+                  </div>
+                  <div className="mobile-item-details">
+                    <div className="mobile-item-detail">
+                      <span className="detail-label">Category</span>
+                      <span className="detail-value">{m.category}</span>
+                    </div>
+                    <div className="mobile-item-detail">
+                      <span className="detail-label">Shelf</span>
+                      <span className="detail-value">Shelf {m.shelfNumber || 1}</span>
+                    </div>
+                    <div className="mobile-item-detail">
+                      <span className="detail-label">Stock</span>
+                      <span className="detail-value" style={{ color: stock.color }}>{qty} <span className={`badge ${stock.badge}`} style={{ marginLeft: 4 }}>{stock.label}</span></span>
+                    </div>
+                    <div className="mobile-item-detail">
+                      <span className="detail-label">Temp Range</span>
+                      <span className="detail-value">{m.minTemp}°C — {m.maxTemp}°C</span>
+                    </div>
+                  </div>
+                  {canEditStock && (
+                    <div className="mobile-item-actions">
+                      <button className="btn btn-outline btn-sm" onClick={() => updateStock(m.id, qty - 1)} disabled={qty <= 0}>−1</button>
+                      <button className="btn btn-outline btn-sm" onClick={() => updateStock(m.id, qty + 10)}>+10</button>
+                      <button className="btn btn-outline btn-sm" onClick={() => updateStock(m.id, qty + 50)}>+50</button>
+                      {isAdmin && (
+                        <>
                           <button className="btn btn-outline btn-sm" onClick={() => openEdit(m)}>Edit</button>
                           <button className="btn btn-danger btn-sm" onClick={() => handleDelete(m.id)}>Del</button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {showModal && (
